@@ -115,3 +115,33 @@ def test_ack_wait(server):
     cl2.ack('test', msg_id, 10)
     result = f.get(1)
     assert result == 10
+
+def test_group_messages(server):
+    cl = Client('/tmp/sock')
+
+    cl.put('test', 'msg1', priority=100, group='worker1')
+    cl.put('test', 'msg2', priority=90, group='worker1')
+    cl.put('test', 'msg3', priority=50, group='worker2')
+    cl.put('test', 'msg4', priority=30, group='worker2')
+    cl.put('test', 'msg5', priority=5, group=None)
+
+    msg1_id, message = cl.get('test', True, False)
+    assert message == 'msg1'
+
+    msg3_id, message = cl.get('test', True, False)
+    assert message == 'msg3'
+
+    msg5_id, message = cl.get('test', True, False)
+    assert message == 'msg5'
+
+    cl.ack('test', msg5_id)
+    msg_id, message = cl.get('test', True, False)
+    assert msg_id is None
+
+    cl.ack('test', msg1_id)
+    msg_id, message = cl.get('test', True, False)
+    assert message == 'msg2'
+
+    cl.ack('test', msg3_id)
+    msg_id, message = cl.get('test', True, False)
+    assert message == 'msg4'

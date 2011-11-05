@@ -69,8 +69,8 @@ class Session(asyncore.dispatcher):
         self.result = str(len(self.result)).ljust(10) + self.result
         self.result_ready = True
 
-    def do_put(self, queue_id, message, message_id, priority):
-        return get_queue(queue_id).put(message, message_id, priority)
+    def do_put(self, queue_id, message, message_id, priority, group):
+        return get_queue(queue_id).put(message, message_id, priority, group)
 
     def do_wait_ack(self, queue_id, message_id):
         get_queue(queue_id).wait_for_ack(message_id, self.on_ack)

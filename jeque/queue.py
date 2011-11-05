@@ -1,14 +1,26 @@
 import time
 from uuid import uuid4 as uuid
+from collections import defaultdict
+
+class Message(object):
+    __slots__ = ('message', 'priority', 'group', 'enterdate', 'get')
+
+    def __init__(self, message, priority, group, enterdate, get):
+        self.message = message
+        self.priority = priority
+        self.group = group
+        self.enterdate = enterdate
+        self.get = get
+
 
 class Queue(object):
     def __init__(self):
         self.messages = dict()
-        self.session_ids = dict()
+        self.session_ids = defaultdict(dict)
         self.sleep = time.sleep
 
         self.message_waiters = []
-        self.ack_waiters = {}
+        self.ack_waiters = defaultdict(list)
 
     def check_for_new_messages(self):
         if not self.message_waiters:
@@ -20,28 +32,27 @@ class Queue(object):
             self.message_waiters.pop(0)
             cb(msg_id, message)
 
-    def put(self, message, message_id, priority):
+    def put(self, message, message_id, priority, group):
         message_id = message_id or uuid()
         priority = priority or 50
         enterdate = time.time()
 
         if message_id not in self.messages:
-            self.messages[message_id] = {
-                'message': message, 'priority':priority, 'enterdate':enterdate, 'get':False}
+            self.messages[message_id] = Message(message, priority, group, enterdate, False)
         else:
-            if priority > self.messages[message_id]['priority']:
-                self.messages[message_id]['priority'] = priority
+            if priority > self.messages[message_id].priority:
+                self.messages[message_id].priority = priority
 
-            if enterdate < self.messages[message_id]['enterdate']:
-                self.messages[message_id]['enterdate'] = enterdate
+            if enterdate < self.messages[message_id].enterdate:
+                self.messages[message_id].enterdate = enterdate
 
         self.check_for_new_messages()
         return message_id
 
     def reput(self, session_id, message_id, delay=0):
         if message_id in self.messages:
-            self.messages[message_id]['enterdate'] = time.time() + delay
-            self.messages[message_id]['get'] = False
+            self.messages[message_id].enterdate = time.time() + delay
+            self.messages[message_id].get = False
 
             if session_id in self.session_ids:
                 if message_id in self.session_ids[session_id]:
@@ -51,23 +62,31 @@ class Queue(object):
 
     def get(self, session_id, multi=False):
         if not multi:
+            groups = None
             self.clear_session(session_id)
+        else:
+            try:
+                groups = set(self.session_ids[session_id].itervalues())
+            except KeyError:
+                groups = None
 
         message_id = None
         now = time.time()
         for k, v in self.messages.iteritems():
-            if v['get'] or v['enterdate'] > now: continue
+            if v.get or v.enterdate > now or (
+                    v.group is not None and groups and v.group in groups): continue
 
-            priority = ( now - v['enterdate'] ) * v['priority']
+            priority = (now - v.enterdate) * v.priority
 
             if message_id is None or priority > max_prior:
                 max_prior = priority
                 message_id = k
+                message = v
 
         if message_id:
-            self.session_ids.setdefault(session_id, dict())[message_id] = 1
-            self.messages[message_id]['get'] = True
-            return message_id, self.messages[message_id]['message']
+            self.session_ids[session_id][message_id] = message.group
+            self.messages[message_id].get = True
+            return message_id, self.messages[message_id].message
         else:
             return None, None
 
@@ -75,7 +94,7 @@ class Queue(object):
         self.message_waiters.append((session_id, cb))
 
     def wait_for_ack(self, msg_id, cb):
-        self.ack_waiters.setdefault(msg_id, []).append(cb)
+        self.ack_waiters[msg_id].append(cb)
 
     def __len__(self):
         return len(self.messages)
@@ -95,7 +114,7 @@ class Queue(object):
     def clear_session(self, session_id):
         if session_id in self.session_ids:
             for id in self.session_ids.get(session_id, dict()).keys():
-                self.messages[id]['get'] = False
+                self.messages[id].get = False
 
             del self.session_ids[session_id]
             self.check_for_new_messages()

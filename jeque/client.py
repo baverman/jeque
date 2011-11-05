@@ -40,8 +40,8 @@ class Client(object):
         else:
             raise Exception(result)
 
-    def put(self, queue_id, message, message_id=None, priority=None):
-        return self.call('put', queue_id, message, message_id, priority)
+    def put(self, queue_id, message, message_id=None, priority=None, group=None):
+        return self.call('put', queue_id, message, message_id, priority, group)
 
     def wait_ack(self, queue_id, message_id):
         return self.call('wait_ack', queue_id, message_id)
