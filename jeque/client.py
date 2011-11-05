@@ -41,18 +41,16 @@ class Client(object):
             raise Exception(result)
 
     def put(self, queue_id, message, message_id=None, priority=None):
-        return self.call('put', queue_id, message, message_id=None, priority=None)
+        return self.call('put', queue_id, message, message_id, priority)
 
-    def get(self, queue_id, multi=False, timeout=1):
-        msg_id, message = self.call('get', queue_id, multi)
-        if not msg_id:
-            time.sleep(1)
-            return None, None
-        else:
-            return msg_id, message
+    def wait_ack(self, queue_id, message_id):
+        return self.call('wait_ack', queue_id, message_id)
 
-    def ack(self, queue_id, message_id):
-        return self.call('ack', queue_id, message_id)
+    def get(self, queue_id, multi=False, block=True):
+        return self.call('get', queue_id, multi, block)
+
+    def ack(self, queue_id, message_id, result=None):
+        return self.call('ack', queue_id, message_id, result)
 
     def reput(self, queue_id, message_id, delay=0):
         return self.call('reput', queue_id, message_id, delay)
