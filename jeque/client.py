@@ -60,7 +60,7 @@ class Client(object):
         self.socket.close()
         self.socket = None
 
-    def get_all_messages(self):
+    def dump(self):
         return self.call('dump')
 
     def get_queue_size(self, queue_id):

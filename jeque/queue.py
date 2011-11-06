@@ -16,8 +16,7 @@ class Message(object):
 class Queue(object):
     def __init__(self):
         self.messages = dict()
-        self.session_ids = defaultdict(dict)
-        self.sleep = time.sleep
+        self.pmessages = dict()
 
         self.message_waiters = []
         self.ack_waiters = defaultdict(list)
@@ -49,14 +48,15 @@ class Queue(object):
         self.check_for_new_messages()
         return message_id
 
-    def reput(self, session_id, message_id, delay=0):
+    def reput(self, message_id, delay=0):
         if message_id in self.messages:
             self.messages[message_id].enterdate = time.time() + delay
             self.messages[message_id].get = False
 
-            if session_id in self.session_ids:
-                if message_id in self.session_ids[session_id]:
-                    del self.session_ids[session_id][message_id]
+            try:
+                del self.pmessages[message_id]
+            except:
+                pass
 
             self.check_for_new_messages()
 
@@ -66,14 +66,14 @@ class Queue(object):
             self.clear_session(session_id)
         else:
             try:
-                groups = set(self.session_ids[session_id].itervalues())
+                groups = set(self.pmessages.itervalues())
             except KeyError:
                 groups = None
 
         message_id = None
         now = time.time()
         for k, v in self.messages.iteritems():
-            if v.get or v.enterdate > now or (
+            if v.get is not False or v.enterdate > now or (
                     v.group is not None and groups and v.group in groups): continue
 
             priority = (now - v.enterdate) * v.priority
@@ -84,8 +84,8 @@ class Queue(object):
                 message = v
 
         if message_id:
-            self.session_ids[session_id][message_id] = message.group
-            self.messages[message_id].get = True
+            self.pmessages[message_id] = message.group
+            self.messages[message_id].get = session_id
             return message_id, self.messages[message_id].message
         else:
             return None, None
@@ -93,30 +93,45 @@ class Queue(object):
     def wait_for_message(self, session_id, cb):
         self.message_waiters.append((session_id, cb))
 
-    def wait_for_ack(self, msg_id, cb):
-        self.ack_waiters[msg_id].append(cb)
+    def wait_for_ack(self, session_id, msg_id, cb):
+        self.ack_waiters[msg_id].append((session_id, cb))
 
     def __len__(self):
         return len(self.messages)
 
-    def ack(self, session_id, message_id, result=None):
-        if session_id in self.session_ids:
-            if message_id in self.session_ids[session_id]:
-                del self.session_ids[session_id][message_id]
-                del self.messages[message_id]
+    def ack(self, message_id, result=None):
+        if message_id in self.pmessages:
+            del self.pmessages[message_id]
+            del self.messages[message_id]
 
-                if message_id in self.ack_waiters:
-                    for cb in self.ack_waiters[message_id]:
+            if message_id in self.ack_waiters:
+                for _, cb in self.ack_waiters[message_id]:
+                    try:
                         cb(result)
+                    except:
+                        import traceback
+                        traceback.print_exc()
 
-                    del self.ack_waiters[message_id]
+                del self.ack_waiters[message_id]
+
+            self.check_for_new_messages()
+
+    def session_done(self, session_id):
+        self.message_waiters[:] = [r for r in self.message_waiters if r[0] != session_id]
+        for mid, ack_waiters in self.ack_waiters.iteritems():
+            ack_waiters[:] = [r for r in ack_waiters if r[0] != session_id]
+
+        self.clear_session(session_id)
 
     def clear_session(self, session_id):
-        if session_id in self.session_ids:
-            for id in self.session_ids.get(session_id, dict()).keys():
-                self.messages[id].get = False
+        messages_cleared = False
+        for mid in list(self.pmessages):
+            if self.messages[mid].get == session_id:
+                del self.pmessages[mid]
+                self.messages[mid].get = False
+                messages_cleared = True
 
-            del self.session_ids[session_id]
+        if messages_cleared:
             self.check_for_new_messages()
 
     def all_messages(self):

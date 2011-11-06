@@ -1,3 +1,4 @@
+import time
 import asyncore
 import socket
 import traceback
@@ -15,11 +16,6 @@ def get_queue(queue_id):
 
     q = queue_dict[queue_id] = Queue()
     return q
-
-def get_all_messages():
-    for queue_id, queue in queue_dict.items():
-        for id, message in queue.all_messages():
-            yield queue_id, id, message
 
 class DelayedResult(Exception): pass
 
@@ -42,10 +38,12 @@ class Session(asyncore.dispatcher):
         args = loads(data)
         method = args[0]
         args = args[1:]
+        #print self.session_id, method, args
 
         try:
             result = getattr(self, 'do_' + method)(*args)
         except DelayedResult:
+            #print self.session_id, 'DL'
             pass
         except Exception, e:
             traceback.print_exc()
@@ -60,11 +58,12 @@ class Session(asyncore.dispatcher):
     def handle_close(self):
         print 'session %d closed' % self.session_id
         for q in queue_dict.itervalues():
-            q.clear_session(self.session_id)
+            q.session_done(self.session_id)
 
         self.close()
 
     def send_result(self, status, result):
+        #print self.session_id, 'R', status, result
         self.result = dumps((status, result))
         self.result = str(len(self.result)).ljust(10) + self.result
         self.result_ready = True
@@ -73,7 +72,7 @@ class Session(asyncore.dispatcher):
         return get_queue(queue_id).put(message, message_id, priority, group)
 
     def do_wait_ack(self, queue_id, message_id):
-        get_queue(queue_id).wait_for_ack(message_id, self.on_ack)
+        get_queue(queue_id).wait_for_ack(self.session_id, message_id, self.on_ack)
         raise DelayedResult()
 
     def on_ack(self, result):
@@ -92,15 +91,20 @@ class Session(asyncore.dispatcher):
         self.send_result(True, (msg_id, message))
 
     def do_ack(self, queue_id, message_id, result):
-        get_queue(queue_id).ack(self.session_id, message_id, result)
+        get_queue(queue_id).ack(message_id, result)
 
     def do_reput(self, queue_id, message_id, delay):
-        get_queue(queue_id).reput(self.session_id, message_id, delay)
+        get_queue(queue_id).reput(message_id, delay)
 
     def do_dump(self):
-        result = u''
-        for queue_id, id, message in get_all_messages():
-            result += u"%s %s %s\n" % (queue_id, id, unicode(message))
+        now = time.time()
+        result = {}
+
+        for queue_id, queue in queue_dict.iteritems():
+            messages, pmessages = result[queue_id] = [], queue.pmessages
+            for msg_id, message in queue.all_messages():
+                messages.append((msg_id, message.message, message.priority,
+                    int(now - message.enterdate), message.get))
 
         return result
 
