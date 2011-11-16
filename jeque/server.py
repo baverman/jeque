@@ -1,7 +1,9 @@
+import os
 import time
 import asyncore
 import socket
 import traceback
+import threading
 from cPickle import dumps, loads
 
 from .queue import Queue
@@ -111,6 +113,16 @@ class Session(asyncore.dispatcher):
     def do_size(self, queue_id):
         return len(get_queue(queue_id))
 
+class Timer(asyncore.file_dispatcher):
+    def handle_read(self):
+        self.recv(1)
+        for q in queue_dict.itervalues():
+            q.check_for_new_messages()
+
+def timer_feeder(fd):
+    while True:
+        time.sleep(10)
+        os.write(fd, '0')
 
 class Server(asyncore.dispatcher):
     def __init__(self, addr):
@@ -128,6 +140,11 @@ class Server(asyncore.dispatcher):
         Session(self.session_counter, channel)
 
     def run(self):
+        r, w = os.pipe()
+        self.timer = Timer(r)
+        t = threading.Thread(target=timer_feeder, args=(w,))
+        t.daemon = True
+        t.start()
         asyncore.loop()
 
     def writable(self):
