@@ -1,9 +1,11 @@
-import os, sys
+import os
 import time
 import asyncore
 import socket
 import traceback
 import threading
+import logging
+
 from cPickle import dumps, loads
 
 from .queue import Queue
@@ -41,12 +43,12 @@ class Session(asyncore.dispatcher):
         args = loads(data)
         method = args[0]
         args = args[1:]
-        #print self.session_id, method, args
+        logging.getLogger(__name__).debug('%s %s %s', self.session_id, method, args)
 
         try:
             result = getattr(self, 'do_' + method)(*args)
         except DelayedResult:
-            #print self.session_id, 'DL'
+            logging.getLogger(__name__).debug('Delayed result')
             pass
         except Exception, e:
             traceback.print_exc()
@@ -59,14 +61,14 @@ class Session(asyncore.dispatcher):
         sendall(self, self.result)
 
     def handle_close(self):
-        print 'session %d closed' % self.session_id
+        logging.getLogger(__name__).info('Session %s closed', self.session_id)
         for q in queue_dict.itervalues():
             q.session_done(self.session_id)
 
         self.close()
 
     def send_result(self, status, result):
-        #print self.session_id, 'R', status, result
+        logging.getLogger(__name__).debug('Result: %s', result)
         self.result = dumps((status, result))
         self.result = str(len(self.result)).ljust(10) + self.result
         self.result_ready = True
@@ -138,7 +140,7 @@ class Server(asyncore.dispatcher):
         self.bind(addr)
         self.listen(10)
         self.session_counter = 0
-        print "Queue server started", self.addr
+        logging.getLogger(__name__).info("Queue server started %s", self.addr)
 
     def handle_accept(self):
         channel, addr = self.accept()
