@@ -2,7 +2,6 @@ import os
 import time
 import asyncore
 import socket
-import traceback
 import threading
 import logging
 
@@ -50,8 +49,8 @@ class Session(asyncore.dispatcher):
         except DelayedResult:
             logging.getLogger(__name__).debug('Delayed result')
             pass
-        except Exception, e:
-            traceback.print_exc()
+        except Exception as e:
+            logging.getLogger(__name__).exception('Queue:')
             self.send_result(False, str(e))
         else:
             self.send_result(True, result)
@@ -117,8 +116,7 @@ class Session(asyncore.dispatcher):
         return len(get_queue(queue_id))
 
     def handle_error(self):
-        import traceback
-        traceback.print_exc()
+        logging.getLogger(__name__).exception('Ahtung')
         self.handle_close()
 
 class Timer(asyncore.file_dispatcher):

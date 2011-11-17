@@ -1,4 +1,3 @@
-import sys
 import time
 from subprocess import Popen
 from jeque import Client
@@ -22,7 +21,7 @@ class Future(object):
         return self.result
 
 def pytest_funcarg__server(request):
-    srv = Popen('./bin/jeque /tmp/sock', shell=True)
+    srv = Popen('JEQUE_LOG_LEVEL=INFO ./bin/jeque /tmp/sock', shell=True)
     time.sleep(1)
     def close():
         srv.terminate()
