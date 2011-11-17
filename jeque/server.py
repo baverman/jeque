@@ -1,4 +1,4 @@
-import os
+import os, sys
 import time
 import asyncore
 import socket
@@ -7,6 +7,7 @@ import threading
 from cPickle import dumps, loads
 
 from .queue import Queue
+from .utils import sendall, recvall
 
 queue_dict = dict()
 
@@ -31,11 +32,11 @@ class Session(asyncore.dispatcher):
         return self.result_ready
 
     def handle_read(self):
-        data_len = self.recv(10)
+        data_len = recvall(self, 10)
         if not data_len:
             return
 
-        data = self.recv(int(data_len))
+        data = recvall(self, int(data_len))
 
         args = loads(data)
         method = args[0]
@@ -55,7 +56,7 @@ class Session(asyncore.dispatcher):
 
     def handle_write(self):
         self.result_ready = False
-        self.sendall(self.result)
+        sendall(self, self.result)
 
     def handle_close(self):
         print 'session %d closed' % self.session_id

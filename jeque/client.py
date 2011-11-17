@@ -1,7 +1,8 @@
 import socket
-import time
 
 from cPickle import dumps, loads
+
+from .utils import sendall, recvall
 
 class Client(object):
     def __init__(self, socket_path):
@@ -30,10 +31,10 @@ class Client(object):
 
         data = dumps((method,) + args)
         data = str(len(data)).ljust(10) + data
-        self.socket.sendall(data)
+        sendall(self.socket, data)
 
-        data_len = int(self.socket.recv(10))
-        is_ok, result = loads(self.socket.recv(data_len))
+        data_len = int(recvall(self.socket, 10))
+        is_ok, result = loads(recvall(self.socket, data_len))
 
         if is_ok:
             return result

@@ -145,3 +145,14 @@ def test_group_messages(server):
     cl.ack('test', msg3_id)
     msg_id, message = cl.get('test', True, False)
     assert message == 'msg4'
+
+def test_big_ack_result(server):
+    cl1 = Client('/tmp/sock')
+    cl2 = Client('/tmp/sock')
+
+    msg_id = cl1.put('test', 'message')
+    f = Future(cl1.wait_ack, 'test', msg_id)
+    _ = cl2.get('test', block=False)
+    cl2.ack('test', msg_id, ['boo']*100000)
+    result = f.get(10)
+    assert len(result) == 100000
