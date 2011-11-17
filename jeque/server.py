@@ -116,7 +116,7 @@ class Session(asyncore.dispatcher):
     def handle_error(self):
         import traceback
         traceback.print_exc()
-
+        self.handle_close()
 
 class Timer(asyncore.file_dispatcher):
     def handle_read(self):
