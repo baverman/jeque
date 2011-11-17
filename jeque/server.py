@@ -113,6 +113,11 @@ class Session(asyncore.dispatcher):
     def do_size(self, queue_id):
         return len(get_queue(queue_id))
 
+    def handle_error(self):
+        import traceback
+        traceback.print_exc()
+
+
 class Timer(asyncore.file_dispatcher):
     def handle_read(self):
         self.recv(1)
