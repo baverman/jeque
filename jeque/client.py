@@ -66,3 +66,9 @@ class Client(object):
 
     def get_queue_size(self, queue_id):
         return self.call('size', queue_id)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
