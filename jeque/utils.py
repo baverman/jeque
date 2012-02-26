@@ -28,4 +28,6 @@ def sendall(sock, data):
                 time.sleep(0.1)
                 continue
 
+            raise
+
         data = data[sent:]
